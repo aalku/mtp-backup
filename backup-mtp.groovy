@@ -5,24 +5,33 @@ def repoDesc = ".brepoid"
 def repoBasePath = new File("/media/usb/mtpBackups/");
 def mtpMount = new File("/media/mtp/");
 
+def mountCmd = ["jmtpfs", mtpMount];
+def umountCmd = ["umount", mtpMount];
+
+def syncCmd = ["rsync", "-avhx", "--exclude=*cache*", "--exclude=*thumb*", "--stats"];
+
 def testMount = { File dir ->
 	dir.directory && dir.canRead() && dir.listFiles().grep(~/[^.]+/);
 }
 
+mtpMount.mkdirs();
+
 if (!mtpMount.parentFile.list().contains(mtpMount.name)) {
-	println "Cannot find mount point: ${mtpMount}";
+	println "Cannot create mount point: ${mtpMount}";
 	System.exit(1);
 }
 
+repoBasePath.mkdirs();
+
 if (!repoBasePath.directory) {
-	println "Cannot find repository base path: ${repoBasePath}";
+	println "Cannot create repository base path: ${repoBasePath}";
 	System.exit(1);
 }
 
 if (!testMount(mtpMount)) {
 	println "Mount error. Remounting '${mtpMount}' ...";
-	"umount ${mtpMount}".execute();
-	"mount ${mtpMount}".execute();
+	umountCmd.execute();
+	mountCmd.execute();
 	Thread.sleep(1000);
 }
 
@@ -30,7 +39,7 @@ if (testMount(mtpMount)) {
 	println "Mount point OK";
 } else {
 	println "Cannot mount '${mtpMount}'.";
-	println mtpMount.listFiles();
+	// println mtpMount.listFiles();
 	System.exit(1);
 }
 
@@ -92,8 +101,12 @@ roots.each { k, v ->
 		println "New repo for root ${k}:'${v}' = ${repo[k]}. You are free to rename it later.";
 	}
 	println "Syncing '${v}'-->'${repo[k]}'...";
-	def proc = ["rsync", "-Pavh", "--stats", "${v}/", "${repo[k]}/"].execute();
+	List<String> cmdline = [];
+	cmdline += syncCmd;
+	cmdline += ["${v}/", "${repo[k]}/"];
+	def proc = cmdline.execute();
 	proc.consumeProcessOutput(System.out, System.err);
 	def result = proc.waitFor();
 	println "Sync ${result == 0 ? "done" : "error ${result}"}";
 }
+umountCmd.execute();
